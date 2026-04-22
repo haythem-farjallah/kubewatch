@@ -1,0 +1,17 @@
+# Binaries
+kubepeek
+kubepeek.exe
+*.exe
+*.out
+
+# Go build cache
+/vendor/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
