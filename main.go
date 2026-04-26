@@ -35,7 +35,7 @@ func main() {
 	})
 
 	if allNamespace && namespaceWasSet {
-		fmt.Fprintf(os.Stderr, "cannot specify both --namespace and --all-namespaces")
+		fmt.Fprintln(os.Stderr, "cannot specify both --namespace and --all-namespaces")
 		os.Exit(1)
 	} else if allNamespace {
 		nameSpace = metav1.NamespaceAll
@@ -68,7 +68,7 @@ func main() {
 		fmt.Fprintf(os.Stderr, "failed to reach cluster : %v\n", err)
 		os.Exit(1)
 	}
-	fmt.Printf("%-10s %-12s %-20s %-12s %s\n", "TIME", "EVENT", "POD", "NAMESPACE", "PHASE")
+	fmt.Printf("%-10s %-12s %-20s %-12s %-12s %-12s %-12s %s\n", "TIME", "EVENT", "POD", "NAMESPACE", "READY", "STATUS", "RESTARTS", "NODE")
 	for event := range events.ResultChan() {
 		eventType := string(event.Type)
 		pod, ok := event.Object.(*v1.Pod)
@@ -77,7 +77,15 @@ func main() {
 			continue
 		}
 		coloredEventType := colorEventType(eventType)
-		fmt.Printf("%-10s %s %-20s %-12s %s\n", time.Now().Format(time.TimeOnly), coloredEventType, pod.Name, pod.Namespace, pod.Status.Phase)
+		fmt.Printf("%-10s %-12s %-20s %-12s %-12s %-12s %-12d %-12s \n",
+			time.Now().Format(time.TimeOnly),
+			coloredEventType,
+			pod.Name,
+			pod.Namespace,
+			podReady(pod),
+			pod.Status.Phase,
+			podRestarts(pod),
+			podNode(pod))
 	}
 }
 func colorEventType(eventType string) string {
@@ -90,8 +98,31 @@ func colorEventType(eventType string) string {
 	case "DELETED":
 		return color.New(color.FgRed).Sprint(padded)
 	case "ERROR":
-		return color.New(color.FgHiRed).Sprint(padded)
+		return color.New(color.FgHiRed, color.Bold).Sprint(padded)
 	default:
 		return padded
 	}
+}
+func podReady(pod *v1.Pod) string {
+	readyCount := 0
+	for _, cs := range pod.Status.ContainerStatuses {
+		if cs.Ready {
+			readyCount++
+		}
+	}
+	return fmt.Sprintf("%d/%d", readyCount, len(pod.Spec.Containers))
+}
+
+func podRestarts(pod *v1.Pod) int32 {
+	var restarts int32
+	for _, cs := range pod.Status.ContainerStatuses {
+		restarts += cs.RestartCount
+	}
+	return restarts
+}
+func podNode(pod *v1.Pod) string {
+	if pod.Spec.NodeName == "" {
+		return "<none>"
+	}
+	return pod.Spec.NodeName
 }
