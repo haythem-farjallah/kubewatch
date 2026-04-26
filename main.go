@@ -23,6 +23,9 @@ func main() {
 	var allNamespace bool
 	flag.BoolVar(&allNamespace, "all-namespaces", false, "list pods across all namespace")
 	flag.BoolVar(&allNamespace, "A", false, "list pods across all namespace (shorthand)")
+	var selector string
+	flag.StringVar(&selector, "selector", "", "filter pods by label selector")
+	flag.StringVar(&selector, "l", "", "filter pods by label selector (shorthand)")
 	flag.Parse()
 	namespaceWasSet := false
 	flag.Visit(func(f *flag.Flag) {
@@ -60,7 +63,7 @@ func main() {
 	fmt.Printf("	Server version: %s\n", version.GitVersion)
 	fmt.Printf("	Platform:       %s\n", version.Platform)
 	ctx := context.Background()
-	events, err := clientset.CoreV1().Pods(nameSpace).Watch(ctx, metav1.ListOptions{})
+	events, err := clientset.CoreV1().Pods(nameSpace).Watch(ctx, metav1.ListOptions{LabelSelector: selector})
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "failed to reach cluster : %v\n", err)
 		os.Exit(1)
@@ -74,7 +77,7 @@ func main() {
 			continue
 		}
 		coloredEventType := colorEventType(eventType)
-		fmt.Printf("%-10s %-12s %-20s %-12s %s\n", time.Now().Format(time.TimeOnly), coloredEventType, pod.Name, pod.Namespace, pod.Status.Phase)
+		fmt.Printf("%-10s %s %-20s %-12s %s\n", time.Now().Format(time.TimeOnly), coloredEventType, pod.Name, pod.Namespace, pod.Status.Phase)
 	}
 }
 func colorEventType(eventType string) string {
@@ -86,6 +89,8 @@ func colorEventType(eventType string) string {
 		return color.New(color.FgYellow).Sprint(padded)
 	case "DELETED":
 		return color.New(color.FgRed).Sprint(padded)
+	case "ERROR":
+		return color.New(color.FgHiRed).Sprint(padded)
 	default:
 		return padded
 	}
