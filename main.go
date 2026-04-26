@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"flag"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -15,6 +16,26 @@ import (
 )
 
 func main() {
+	var nameSpace string
+	flag.StringVar(&nameSpace, "n", "default", "namespace (shorthand)")
+	flag.StringVar(&nameSpace, "namespace", "default", "namespace")
+	var allNamespace bool
+	flag.BoolVar(&allNamespace, "all-namespaces", false, "list pods across all namespace")
+	flag.BoolVar(&allNamespace, "A", false, "list pods across all namespace (shorthand)")
+	flag.Parse()
+	namespaceWasSet := false
+	flag.Visit(func(f *flag.Flag) {
+		if f.Name == "n" || f.Name == "namespace" {
+			namespaceWasSet = true
+		}
+	})
+
+	if allNamespace && namespaceWasSet {
+		fmt.Fprintf(os.Stderr, "cannot specify both --namespace and --all-namespaces")
+		os.Exit(1)
+	} else if allNamespace {
+		nameSpace = metav1.NamespaceAll
+	}
 	var kubeconfig string
 	if home := homedir.HomeDir(); home != "" {
 		kubeconfig = filepath.Join(home, ".kube", "config")
@@ -38,7 +59,7 @@ func main() {
 	fmt.Printf("	Server version: %s\n", version.GitVersion)
 	fmt.Printf("	Platform:       %s\n", version.Platform)
 	ctx := context.Background()
-	events, err := clientset.CoreV1().Pods("default").Watch(ctx, metav1.ListOptions{})
+	events, err := clientset.CoreV1().Pods(nameSpace).Watch(ctx, metav1.ListOptions{})
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "failed to reach cluster : %v\n", err)
 		os.Exit(1)

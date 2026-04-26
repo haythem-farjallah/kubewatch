@@ -1,6 +1,6 @@
 # Binaries
-kubepeek
-kubepeek.exe
+kubewath
+kubewatch.exe
 *.exe
 *.out
 
