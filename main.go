@@ -5,6 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"os/signal"
 	"path/filepath"
 	"time"
 
@@ -62,32 +63,45 @@ func main() {
 	fmt.Printf("✅ connected to cluster \n")
 	fmt.Printf("	Server version: %s\n", version.GitVersion)
 	fmt.Printf("	Platform:       %s\n", version.Platform)
-	ctx := context.Background()
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
+	defer stop()
 	events, err := clientset.CoreV1().Pods(nameSpace).Watch(ctx, metav1.ListOptions{LabelSelector: selector})
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "failed to reach cluster : %v\n", err)
+		fmt.Fprintf(os.Stderr, "failed to watch pods : %v\n", err)
 		os.Exit(1)
 	}
+	defer events.Stop()
 	fmt.Printf("%-10s %-12s %-20s %-12s %-12s %-12s %-12s %s\n", "TIME", "EVENT", "POD", "NAMESPACE", "READY", "STATUS", "RESTARTS", "NODE")
-	for event := range events.ResultChan() {
-		eventType := string(event.Type)
-		pod, ok := event.Object.(*v1.Pod)
-		if !ok {
-			fmt.Fprintf(os.Stderr, "unexpected object type: %T\n", event.Object)
-			continue
+	for {
+		select {
+		case <-ctx.Done():
+			fmt.Println("\nExiting...")
+			return
+		case event, ok := <-events.ResultChan():
+			if !ok {
+				fmt.Fprintln(os.Stderr, "watch channel closed")
+				return
+			}
+			eventType := string(event.Type)
+			pod, ok := event.Object.(*v1.Pod)
+			if !ok {
+				fmt.Fprintf(os.Stderr, "unexpected object type: %T\n", event.Object)
+				continue
+			}
+			coloredEventType := colorEventType(eventType)
+			fmt.Printf("%-10s %s %-20s %-12s %-12s %-12s %-12d %-12s \n",
+				time.Now().Format(time.TimeOnly),
+				coloredEventType,
+				pod.Name,
+				pod.Namespace,
+				podReady(pod),
+				pod.Status.Phase,
+				podRestarts(pod),
+				podNode(pod))
 		}
-		coloredEventType := colorEventType(eventType)
-		fmt.Printf("%-10s %-12s %-20s %-12s %-12s %-12s %-12d %-12s \n",
-			time.Now().Format(time.TimeOnly),
-			coloredEventType,
-			pod.Name,
-			pod.Namespace,
-			podReady(pod),
-			pod.Status.Phase,
-			podRestarts(pod),
-			podNode(pod))
 	}
 }
+
 func colorEventType(eventType string) string {
 	padded := fmt.Sprintf("%-12s", eventType)
 	switch eventType {
