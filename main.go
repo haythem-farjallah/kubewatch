@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/fatih/color"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
@@ -66,12 +67,26 @@ func main() {
 	}
 	fmt.Printf("%-10s %-12s %-20s %-12s %s\n", "TIME", "EVENT", "POD", "NAMESPACE", "PHASE")
 	for event := range events.ResultChan() {
-		eventType := event.Type
+		eventType := string(event.Type)
 		pod, ok := event.Object.(*v1.Pod)
 		if !ok {
 			fmt.Fprintf(os.Stderr, "unexpected object type: %T\n", event.Object)
 			continue
 		}
-		fmt.Printf("%-10s %-12s %-20s %-12s %s\n", time.Now().Format(time.TimeOnly), eventType, pod.Name, pod.Namespace, pod.Status.Phase)
+		coloredEventType := colorEventType(eventType)
+		fmt.Printf("%-10s %-12s %-20s %-12s %s\n", time.Now().Format(time.TimeOnly), coloredEventType, pod.Name, pod.Namespace, pod.Status.Phase)
+	}
+}
+func colorEventType(eventType string) string {
+	padded := fmt.Sprintf("%-12s", eventType)
+	switch eventType {
+	case "ADDED":
+		return color.New(color.FgGreen).Sprint(padded)
+	case "MODIFIED":
+		return color.New(color.FgYellow).Sprint(padded)
+	case "DELETED":
+		return color.New(color.FgRed).Sprint(padded)
+	default:
+		return padded
 	}
 }
